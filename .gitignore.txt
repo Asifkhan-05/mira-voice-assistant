@@ -1,0 +1,17 @@
+# Virtual environment
+venv/
+
+# Models (too large for GitHub)
+models/
+
+# Temp files
+temp_recording.wav
+memory.json
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Piper output
+response.wav
