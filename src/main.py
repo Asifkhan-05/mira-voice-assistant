@@ -5,20 +5,20 @@ from tts import speak
 from llm import chat
 from wake_word import listen_for_wake_word
 from actions import detect_action
-from memory import remember, recall, get_all_memories
+from memory import recall
 import sys
 sys.path.append(r"D:\VoiceAssistant")
 from config import RECORDING_PATH, ASSISTANT_NAME
 
 def listen_and_respond():
-    # Step 1 — Record until silence
+    # Step 1 — Record
     audio, sr = record_audio()
     save_audio(audio, sr, filename=RECORDING_PATH)
 
-    # Step 2 — Transcribe
+    # Step 2 — Transcribe + detect language
     t1 = time.time()
-    user_text = transcribe(RECORDING_PATH)
-    print(f"⏱️ STT took: {time.time() - t1:.2f}s")
+    user_text, detected_language = transcribe(RECORDING_PATH)
+    print(f"⏱️ STT took: {time.time() - t1:.2f}s | Language: {detected_language}")
 
     if not user_text.strip():
         speak("Sorry, I didn't catch that. Could you repeat?")
@@ -26,21 +26,22 @@ def listen_and_respond():
 
     print(f"🎤 You said: {user_text}")
 
-    # Step 3 — Check actions and memory first
-    action_result = detect_action(user_text)
-    if action_result:
-        print(f"⚡ Action triggered: {action_result}")
-        speak(action_result)
-        return
+    # Step 3 — Actions (English only for now)
+    if detected_language == "en":
+        action_result = detect_action(user_text)
+        if action_result:
+            print(f"⚡ Action triggered: {action_result}")
+            speak(action_result, language="en")
+            return
 
-    # Step 4 — Fall back to LLM
+    # Step 4 — LLM response
     t2 = time.time()
-    reply = chat(user_text)
+    reply = chat(user_text, language=detected_language)
     print(f"⏱️ LLM took: {time.time() - t2:.2f}s")
 
-    # Step 5 — Speak reply
+    # Step 5 — Speak in detected language
     t3 = time.time()
-    speak(reply)
+    speak(reply, language=detected_language)
     print(f"⏱️ TTS took: {time.time() - t3:.2f}s")
 
 def main():
@@ -49,28 +50,27 @@ def main():
     from stt import model as stt_model
     print("✅ All models loaded.\n")
 
-    # Greet user by name if remembered
     user_name = recall("user_name")
     if user_name:
-        speak(f"Welcome back {user_name}! How can I help you?")
+        speak(f"Welcome back {user_name}! What's up?", language="en")
     else:
-        speak(f"Hello! I am {ASSISTANT_NAME}, your voice assistant. How can I help you?")
+        speak(f"Hey! I'm {ASSISTANT_NAME}, your best friend. What's good?", language="en")
 
-    print("🎙️ Mira is ready... (Ctrl+C to stop)\n")
+    print(f"🎙️ {ASSISTANT_NAME} is ready... (Ctrl+C to stop)\n")
 
     while True:
         try:
             listen_for_wake_word()
-            speak("Yes?")
+            speak("Yeah?", language="en")
             listen_and_respond()
 
         except KeyboardInterrupt:
-            speak("Goodbye! Talk to you soon.")
-            print("\n👋 Mira stopped.")
+            speak("Catch you later!", language="en")
+            print(f"\n👋 {ASSISTANT_NAME} stopped.")
             break
         except Exception as e:
             print(f"❌ Error: {e}")
-            speak("Something went wrong, let me try again.")
+            speak("Something went wrong, give me a sec.", language="en")
 
 if __name__ == "__main__":
     main()

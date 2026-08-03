@@ -1,32 +1,19 @@
 from faster_whisper import WhisperModel
-
-# Using 'base' model — good balance of speed and accuracy for 8GB RAM
-MODEL_SIZE = "tiny"
+import sys
+sys.path.append(r"D:\VoiceAssistant")
+from config import WHISPER_MODEL_SIZE, WHISPER_BEAM_SIZE
 
 print("⏳ Loading Whisper model...")
-model = WhisperModel(MODEL_SIZE, device="cpu", compute_type="int8")
+model = WhisperModel(WHISPER_MODEL_SIZE, device="cpu", compute_type="int8")
 print("✅ Whisper model loaded.")
 
-def transcribe(audio_path="test_recording.wav"):
+def transcribe(audio_path):
     print("🧠 Transcribing...")
-    segments, info = model.transcribe(audio_path, beam_size=5, language="en")
-    
-    full_text = ""
-    for segment in segments:
-        full_text += segment.text + " "
-    
-    full_text = full_text.strip()
+    segments, info = model.transcribe(
+        audio_path,
+        beam_size=WHISPER_BEAM_SIZE,
+        language="en"
+    )
+    full_text = " ".join([s.text for s in segments]).strip()
     print(f"📝 You said: {full_text}")
-    return full_text
-
-if __name__ == "__main__":
-    # Test: transcribe the recording from audio.py
-    import sounddevice as sd
-    import soundfile as sf
-    import numpy as np
-    from audio import record_audio, save_audio
-
-    audio, sr = record_audio(duration=5)
-    save_audio(audio, sr)
-    result = transcribe("test_recording.wav")
-    print(f"\n Result: '{result}'")
+    return full_text, "en"
