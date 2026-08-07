@@ -3,17 +3,19 @@ import os
 import subprocess
 import datetime
 import requests
+import threading
+import re
 import sys
 sys.path.append(r"D:\VoiceAssistant")
 from memory import remember, recall, forget
 
 # ─── App Paths ───────────────────────────────────────────
 CHROME_PATH = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
-BRAVE_PATH = r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe"
+BRAVE_PATH  = r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe"
 VSCODE_PATH = r"C:\Users\Asif\AppData\Local\Programs\Microsoft VS Code\Code.exe"
-SPOTIFY_PATH = r"C:\Users\Asif\AppData\Roaming\Spotify\Spotify.exe"
-STEAM_PATH = r"C:\Program Files (x86)\Steam\Steam.exe"
-WORD_PATH = r"C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE"
+SPOTIFY_PATH= r"C:\Users\Asif\AppData\Roaming\Spotify\Spotify.exe"
+STEAM_PATH  = r"C:\Program Files (x86)\Steam\Steam.exe"
+WORD_PATH   = r"C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE"
 
 WEATHER_API_KEY = "3873c793fa5cf1c8e21eabc34e171eef"
 
@@ -209,51 +211,39 @@ def get_weather(city="Bengaluru"):
             timeout=10
         )
         data = resp.json()
-
         if resp.status_code != 200:
             return "Couldn't fetch weather right now."
-
-        temp = data["main"]["temp"]
-        feels_like = data["main"]["feels_like"]
+        temp        = data["main"]["temp"]
+        feels_like  = data["main"]["feels_like"]
         description = data["weather"][0]["description"]
-        humidity = data["main"]["humidity"]
-        city_name = data["name"]
-
+        humidity    = data["main"]["humidity"]
+        city_name   = data["name"]
         return f"It's {temp}°C in {city_name}, feels like {feels_like}°C, {description}, humidity is {humidity}%."
-
     except Exception as e:
         print(f"❌ Weather error: {e}")
         return "Something went wrong fetching the weather."
 
-import threading
-
+# ─── Timer ───────────────────────────────────────────────
 def set_timer(seconds, label="Timer"):
     def timer_done():
         print(f"⏰ {label} done!")
         from tts import speak
         speak(f"Hey! Your {label} is done!")
-    
     timer = threading.Timer(seconds, timer_done)
     timer.start()
-    
     if seconds >= 60:
         minutes = seconds // 60
         return f"Got it! Timer set for {minutes} minute{'s' if minutes > 1 else ''}!"
     return f"Got it! Timer set for {seconds} seconds!"
 
 def parse_timer(text):
-    """Extract duration from text like 'set a timer for 5 minutes'"""
     import re
     text_lower = text.lower()
-    
-    # Match patterns like "5 minutes", "30 seconds", "1 hour"
-    hours = re.search(r'(\d+)\s*hour', text_lower)
-    minutes = re.search(r'(\d+)\s*min', text_lower)
-    seconds = re.search(r'(\d+)\s*sec', text_lower)
-    
+    hours   = re.search(r'(\d+)\s*hour', text_lower)
+    minutes = re.search(r'(\d+)\s*min',  text_lower)
+    seconds = re.search(r'(\d+)\s*sec',  text_lower)
     total_seconds = 0
-    label_parts = []
-    
+    label_parts   = []
     if hours:
         total_seconds += int(hours.group(1)) * 3600
         label_parts.append(f"{hours.group(1)} hour")
@@ -263,126 +253,148 @@ def parse_timer(text):
     if seconds:
         total_seconds += int(seconds.group(1))
         label_parts.append(f"{seconds.group(1)} second")
-    
     if total_seconds > 0:
-        label = " ".join(label_parts)
-        return set_timer(total_seconds, label)
-    
+        return set_timer(total_seconds, " ".join(label_parts))
     return "I didn't catch the duration. Try saying set a timer for 5 minutes."
+
 # ─── Search and Save to Word ─────────────────────────────
 def search_and_save_to_word(query):
     from docx import Document
     import re
-
     print(f"🔍 Searching for: {query}")
-
-    headers = {
-        "User-Agent": "Athena/1.0 (Voice Assistant; contact@example.com)"
-    }
-
+    headers = {"User-Agent": "Athena/1.0 (Voice Assistant; contact@example.com)"}
     try:
         search_resp = requests.get(
             "https://en.wikipedia.org/w/api.php",
-            params={
-                "action": "query",
-                "list": "search",
-                "format": "json",
-                "srsearch": query,
-                "srlimit": 1
-            },
-            headers=headers,
-            timeout=10
+            params={"action": "query", "list": "search", "format": "json", "srsearch": query, "srlimit": 1},
+            headers=headers, timeout=10
         )
-
-        search_data = search_resp.json()
-        results = search_data.get("query", {}).get("search", [])
-
+        results = search_resp.json().get("query", {}).get("search", [])
         if not results:
             return f"Couldn't find anything about {query}."
-
         page_title = results[0]["title"]
         print(f"📄 Found page: {page_title}")
-
         content_resp = requests.get(
             "https://en.wikipedia.org/w/api.php",
-            params={
-                "action": "query",
-                "format": "json",
-                "titles": page_title,
-                "prop": "extracts",
-                "explaintext": True,
-                "exsectionformat": "plain"
-            },
-            headers=headers,
-            timeout=10
+            params={"action": "query", "format": "json", "titles": page_title, "prop": "extracts", "explaintext": True, "exsectionformat": "plain"},
+            headers=headers, timeout=10
         )
-
-        content_data = content_resp.json()
-        pages = content_data.get("query", {}).get("pages", {})
-        page = next(iter(pages.values()))
+        pages   = content_resp.json().get("query", {}).get("pages", {})
+        page    = next(iter(pages.values()))
         content = page.get("extract", "")
-
         if not content:
             return "Found the page but couldn't extract content."
-
         doc = Document()
         doc.add_heading(page_title, 0)
         doc.add_paragraph(f"Source: https://en.wikipedia.org/wiki/{page_title.replace(' ', '_')}")
         doc.add_paragraph("")
-
-        paragraphs = [p.strip() for p in content.split("\n") if p.strip()]
-        for para in paragraphs[:80]:
+        for para in [p.strip() for p in content.split("\n") if p.strip()][:80]:
             doc.add_paragraph(para)
-
-        desktop = os.path.join(os.path.expanduser("~"), "Desktop")
+        desktop  = os.path.join(os.path.expanduser("~"), "Desktop")
         filename = re.sub(r'[^\w\s]', '', query)[:30].strip().replace(" ", "_")
         filepath = os.path.join(desktop, f"{filename}.docx")
         doc.save(filepath)
-
         print(f"💾 Saved to: {filepath}")
         return f"Done! Saved content about {page_title} to your desktop!"
-
     except Exception as e:
         print(f"❌ Error: {e}")
         return "Something went wrong while searching and saving."
 
+# ─── Math Solver ─────────────────────────────────────────
+def solve_math(text):
+    from sympy.parsing.sympy_parser import (parse_expr, standard_transformations,
+                                             implicit_multiplication_application)
+    from sympy import pi, sin, cos, tan, sqrt, log, N
+
+    text_lower = text.lower().strip()
+
+    replacements = {
+    "sine":          "sin",
+    "cosine":        "cos",
+    "tangent":       "tan",
+    "cause":         "cos",
+    "sign":          "sin",
+    "squared":       "**2",
+    "cubed":         "**3",
+    "divide":        "",        
+    "by":            "/",       
+    "power of":      "**",      # must come before "of"
+    "square root of":"sqrt",    # must come before "of"
+    "times of":      "*",       # must come before "times"
+    "multiplied by": "*",
+    "times":         "*",
+    "divided by":    "/",
+    "plus":          "+",
+    "minus":         "-",
+    "what is":       "",
+    "calculate":     "",
+    "compute":       "",
+    "give me":       "",
+    "the sum of":    "",
+    "the result of": "",
+    "sum of":        "",
+    "of":            "",        # comes last
+    "equals":        "",
+    "quotient":      "",
+    "product":       "",
+    "add":           "",
+    "subtract":      "",
+    "with":          "+",
+    "and":           "+",
+    "degrees":       "",
+    
+    # After the replacements loop:
+}
+    text_lower = re.sub(r'(sin|cos|tan)\s*\(?\s*(\d+)\s*\)?', 
+    lambda m: f"{m.group(1)}({float(m.group(2)) * 3.14159265 / 180})", 
+    text_lower)
+    
+    for word, symbol in replacements.items():
+        text_lower = text_lower.replace(word, symbol)
+
+    text_lower = text_lower.strip(".,!? ").strip()
+
+    try:
+        transformations = standard_transformations + (implicit_multiplication_application,)
+        local_dict = {"pi": pi, "sin": sin, "cos": cos, "tan": tan,
+                      "sqrt": sqrt, "log": log, "e": N(2.71828)}
+        expr   = parse_expr(text_lower, local_dict=local_dict, transformations=transformations)
+        result = float(expr.evalf())
+        if result == int(result):
+            return f"The answer is {int(result)}."
+        else:
+            return f"The answer is {round(result, 6)}."
+    except Exception as e:
+        print(f"Math parse error: {e}")
+        return None
+
 # ─── Memory ──────────────────────────────────────────────
 def handle_memory(text):
     text_lower = text.lower()
-
     if "my name is" in text_lower:
-        after = text_lower.split("my name is")[-1].strip()
-        name = after.split()[0].strip(".,!?").capitalize()
+        name = text_lower.split("my name is")[-1].strip().split()[0].strip(".,!?").capitalize()
         remember("user_name", name)
         return f"Got it! I'll remember your name is {name}."
-
     if "i live in" in text_lower:
-        after = text_lower.split("i live in")[-1].strip()
-        city = after.split()[0].strip(".,!?").capitalize()
+        city = text_lower.split("i live in")[-1].strip().split()[0].strip(".,!?").capitalize()
         remember("user_city", city)
         return f"Got it! I'll remember you live in {city}."
-
     if "i am from" in text_lower:
-        after = text_lower.split("i am from")[-1].strip()
-        place = after.split()[0].strip(".,!?").capitalize()
+        place = text_lower.split("i am from")[-1].strip().split()[0].strip(".,!?").capitalize()
         remember("user_city", place)
         return f"Got it! I'll remember you're from {place}."
-
     if "i like" in text_lower:
         interest = text_lower.split("i like")[-1].strip().strip(".,!?")
         remember("user_interest", interest)
         return f"Got it! I'll remember you like {interest}."
-
     if "i love" in text_lower:
         interest = text_lower.split("i love")[-1].strip().strip(".,!?")
         remember("user_interest", interest)
         return f"Nice! I'll remember you love {interest}."
-
     if "forget my" in text_lower:
         key = text_lower.split("forget my")[-1].strip().strip(".,!?")
         forget(f"user_{key}")
         return f"Done, forgot your {key}."
-
     return None
 
 # ─── Smart Keyword Intent Map ─────────────────────────────
@@ -412,14 +424,13 @@ INTENT_KEYWORDS = {
     "open_steam":         ["steam", "gaming"],
     "open_netflix":       ["netflix"],
     "open_prime":         ["prime video", "prime", "amazon"],
-    "get_time":           ["time", "what time"],
-    "get_date":           ["date", "what date", "today"],
+    "get_time":           ["what time", "current time", "tell me the time"],
+    "get_date":           ["what date", "today's date", "current date"],
     "get_weather":        ["weather", "temperature", "how hot", "how cold"],
     "shutdown_pc":        ["shut down", "shutdown", "turn off"],
     "restart_pc":         ["restart", "reboot"],
     "sleep_pc":           ["sleep", "hibernate"],
     "lock_pc":            ["lock"],
-    "set_timer": ["timer", "set a timer", "remind me in", "alarm"],
     "increase_volume":    ["volume up", "increase volume", "louder", "turn up"],
     "decrease_volume":    ["volume down", "decrease volume", "quieter", "turn down"],
     "mute_volume":        ["mute", "silence"],
@@ -472,6 +483,24 @@ def detect_action(text):
     if memory_result:
         return memory_result
 
+    # Math detection
+    math_keywords = [
+        "what is", "calculate", "compute", "solve",
+        "add", "subtract", "multiply", "divide",
+        "sum of", "product of", "quotient of",
+        "squared", "cubed", "power",
+        "sin", "cos", "tan", "log", "sqrt",
+        "plus", "minus", "times", "divided by"
+    ]
+    trig_keywords = ["sin", "cos", "tan", "sine", "cosine", "tangent", "cause", "sign"]
+    has_number    = any(char.isdigit() for char in text_lower)
+    has_trig      = any(kw in text_lower for kw in trig_keywords)
+
+    if (has_number or has_trig) and any(kw in text_lower for kw in math_keywords):
+        result = solve_math(text)
+        if result:
+            return result
+
     # Search and save to Word
     if any(phrase in text_lower for phrase in ["search and save", "find and save", "search and write", "look up and save"]):
         for kw in ["search and save", "find and save", "search and write", "look up and save"]:
@@ -479,6 +508,10 @@ def detect_action(text):
                 query = text_lower.split(kw)[-1].strip().strip(".,!?")
                 if query:
                     return search_and_save_to_word(query)
+
+    # Timer
+    if any(w in text_lower for w in ["timer", "remind me in", "alarm"]):
+        return parse_timer(text)
 
     # Weather with specific city
     if "weather" in text_lower or "temperature" in text_lower:
@@ -488,10 +521,6 @@ def detect_action(text):
                 if city:
                     return get_weather(city)
         return get_weather()
-        # Timer
-    if any(w in text_lower for w in ["timer", "remind me in", "alarm"]):
-         return parse_timer(text)
-
 
     # YouTube search
     if "youtube" in text_lower and any(w in text_lower for w in ["search", "find", "play", "look up"]):
@@ -511,7 +540,7 @@ def detect_action(text):
                 if query:
                     return search_google(query)
 
-    # Match keywords
+    # Keyword matching
     sorted_intents = sorted(INTENT_KEYWORDS.items(), key=lambda x: max(len(k) for k in x[1]), reverse=True)
     for intent, keywords in sorted_intents:
         for keyword in keywords:

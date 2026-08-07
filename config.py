@@ -43,8 +43,9 @@ Never use bullet points, markdown, or special characters.
 
 # ─── Language Settings ───────────────────────────────────
 # ─── Language Settings ───────────────────────────────────
+# ─── Language Settings ───────────────────────────────────
 LANGUAGE_MODELS = {
-    "en": os.path.join(MODELS_DIR, "piper", "piper", "en_US-lessac-low.onnx"),
+    "en": os.path.join(MODELS_DIR, "piper", "piper", "en_US-libritts-high.onnx"),
 }
 
 DEFAULT_LANGUAGE = "en"
